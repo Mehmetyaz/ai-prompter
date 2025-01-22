@@ -1,0 +1,36 @@
+{
+  "name": "ai-prompter",
+  "version": "0.0.1",
+  "author": "Mehmet Yaz",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mehmetyaz/ai-prompter.git"
+  },
+  "homepage": "https://github.com/Mehmetyaz/ai-prompter",
+  "bugs": {
+    "url": "https://github.com/Mehmetyaz/ai-prompter/issues"
+  },
+  "private": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "tslint -p tsconfig.json",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "prepublish": "npm run build"
+  },
+  "types": "dist/index.d.ts",
+  "main": "dist/index.js",
+  "keywords": [],
+  "description": "",
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "22.10.7",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "5.7.2"
+  }
+}
