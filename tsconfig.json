@@ -12,8 +12,7 @@
     "moduleResolution": "Node",
     "forceConsistentCasingInFileNames": true,
     "allowSyntheticDefaultImports": true,
-    "incremental": true,
-    "tsBuildInfoFile": ".tsbuildinfo"
+    "incremental": true
   },
   "include": ["src", "__tests__"],
   "exclude": ["node_modules", "**/__tests__/*"]
