@@ -397,63 +397,79 @@ const messages = prompt.build();
 // ]
 ```
 
+### Message Options and Filtering
+
+You can add options to messages and filter them when building.
+
+**Use Case**
+
+Build prompt cross-API:
+You can build prompt same way and you can use different filter for different API.
+For example:
+
+- Build prompt same way.
+- Add tags to messages like 'main-instruction', 'user-instruction', 'request-instruction'. Example tags for AI language learning platform:
+  - `main-instruction` : Main instruction created by your platform, your schema description, rules and etc.
+  - `user-instruction` : User instructions. Which language user wants to learn, observations about user, user's goals and etc.
+  - `request-instruction` : Information about the learning material to be created.
+- For Claude:
+  - Don't filter messages (`build`).
+- For OpenAI:
+  - If you use assistant api:
+    - When creating a main assistant for your service, filter messages only has 'main-instruction' tag for assistant.instructions (`buildWithAssistant`).
+    - When creating a thread with main assistant for a specific user, filter messages only has 'user-instruction' tag for thread.additionalContext (`buildWithAssistant`).
+    - When running a thread for a specific request, filter messages only has 'request-instruction' tag for run.messages (`buildWithAssistant`).
+  - If you don't use assistant api:
+    - Don't filter messages (`build`).
+
+```typescript
+// Define your message types
+declare global {
+  namespace AIPrompter {
+    interface BuildingPrompt {
+      tags?: string[];
+      priority?: number;
+      category?: string;
+    }
+  }
+}
+
+const prompt = new PromptBuilder();
+
+// Add messages with options
+prompt.systemMessage("High Priority Setup", {
+  placeholder: "<setup>",
+  extra: {
+    tags: ["system", "setup"],
+    priority: 1,
+    category: "config",
+  },
+});
+
+prompt.userMessage("User Question", {
+  placeholder: "<question>",
+  extra: {
+    tags: ["user", "question"],
+    priority: 2,
+    category: "support",
+  },
+});
+
+// Filter messages when building
+const messages = prompt.build((msg) => {
+  // Always include system messages
+  if (msg.role === "system") return true;
+
+  // For others, check category and priority
+  return msg.category === "support" && msg.priority === 2;
+});
+
+// Result will contain:
+// - messages: all system messages and filtered(category: support, priority: 2) user and assistant messages
+```
+
 ## API Reference
 
 ### Common Types
 
-`type WithMessageBuilder = (message: MessageBuilder) => void;` - A function that takes a MessageBuilder and returns void.
-
-`type WithMessageBuilderAsync = (message: MessageBuilder) => Promise<void>;` - A function that takes a MessageBuilder and returns a Promise that resolves to void.
-
-`type MessageInput = string | number | boolean | MessageBuilder;` - A message can be a string, number, boolean, or a MessageBuilder.
-
-### PromptBuilder
-
-- `constructor(args?: Record<string, any>)` - Create a new prompt builder with optional template variables
-
-#### System Messages
-
-- `systemMessage(message: MessageInput | WithMessageBuilder)` - Add a system message
-- `systemMessageAsync(fn: WithMessageBuilderAsync)` - Add a system message asynchronously
-
-#### User Messages
-
-- `userMessage(message: MessageInput | WithMessageBuilder)` - Add a user message
-- `userMessageAsync(fn: WithMessageBuilderAsync)` - Add a user message asynchronously
-
-#### Assistant Messages
-
-- `assistantMessage(message: MessageInput | WithMessageBuilder)` - Add an assistant message
-- `assistantMessageAsync(fn: WithMessageBuilderAsync)` - Add an assistant message asynchronously
-
-#### Build
-
-- `build()` - Build all messages
-- `buildForAssistant()` - Build messages optimized for AI assistant format
-
-### MessageBuilder
-
-- `constructor(indent?: string)` - Create a new message builder with optional indentation
-
-#### Add a message
-
-- `add(message: MessageInput | WithMessageBuilder)` - Add a message
-- `addAsync(fn: WithMessageBuilderAsync)` - Add a message asynchronously
-
-#### Add a key-value pair
-
-- `addKv(key: string, value: any)` - Add a key-value pair
-- `addKvAsync(key: string, fn: WithMessageBuilderAsync)` - Add a key-value pair asynchronously
-
-#### Build
-
-- `build(withIndent?: boolean)` - Build the message
-- `static setGlobalIndent(indent: string)` - Set global indentation
-
-## License
-
-MIT
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+`

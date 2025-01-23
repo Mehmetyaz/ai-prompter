@@ -1,5 +1,15 @@
 import { PromptBuilder } from "../index";
 
+declare global {
+  namespace AIPrompter {
+    interface BuildingPrompt {
+      tags?: string[];
+      priority?: number;
+      category?: string;
+    }
+  }
+}
+
 describe("PromptBuilder", () => {
   let promptBuilder: PromptBuilder;
 
@@ -30,8 +40,12 @@ describe("PromptBuilder", () => {
 
     it("should add system message", () => {
       promptBuilder.systemMessage("System instruction");
-      promptBuilder.userMessage("User msg", "user_placeholder");
-      promptBuilder.assistantMessage("Asst msg", "asst_placeholder");
+      promptBuilder.userMessage("User msg", {
+        placeholder: "<user_placeholder>",
+      });
+      promptBuilder.assistantMessage("Asst msg", {
+        placeholder: "<asst_placeholder>",
+      });
 
       const { messages, context } = promptBuilder.buildForAssistant();
 
@@ -78,7 +92,7 @@ describe("PromptBuilder", () => {
     it("should handle multiple system messages and placeholders", () => {
       promptBuilder.systemMessage("System 1");
       promptBuilder.systemMessage("System 2");
-      promptBuilder.userMessage("User msg", "placeholder1");
+      promptBuilder.userMessage("User msg", { placeholder: "<placeholder1>" });
 
       const result = promptBuilder.buildForAssistant();
       expect(result.messages).toHaveLength(1);
@@ -182,6 +196,115 @@ describe("PromptBuilder", () => {
       }).toThrow(
         "Async function cannot be used with non-async message method. Use assistantMessageAsync instead."
       );
+    });
+  });
+
+  describe("message filtering and extra data", () => {
+    beforeEach(() => {
+      promptBuilder = new PromptBuilder();
+    });
+
+    it("should filter messages based on tags", () => {
+      promptBuilder.systemMessage("System 1", {
+        extra: { tags: ["important"] },
+      });
+      promptBuilder.systemMessage("System 2", {
+        extra: { tags: ["optional"] },
+      });
+      promptBuilder.userMessage("User 1", { extra: { tags: ["important"] } });
+      promptBuilder.userMessage("User 2", { extra: { tags: ["optional"] } });
+
+      const result = promptBuilder.buildForAssistant(
+        (msg) => msg.tags?.includes("important") ?? false
+      );
+
+      expect(result.messages).toHaveLength(1); // Only User 1
+      expect(result.context).toBe("System 1"); // Only System 1
+    });
+
+    it("should handle custom extra data", () => {
+      promptBuilder.systemMessage("High priority", {
+        extra: { priority: 1, category: "setup" },
+      });
+      promptBuilder.userMessage("Medium priority", {
+        extra: { priority: 2, category: "question" },
+      });
+
+      const result = promptBuilder.buildForAssistant(
+        (msg) => (msg.priority as number) < 2
+      );
+
+      expect(result.messages).toHaveLength(0); // No user messages
+      expect(result.context).toBe("High priority"); // Only high priority system message
+    });
+
+    it("should handle both tags and custom extra data", () => {
+      promptBuilder.systemMessage("Important System", {
+        extra: { tags: ["system", "important"], priority: 1 },
+      });
+      promptBuilder.userMessage("Important User", {
+        extra: { tags: ["user", "important"], priority: 2 },
+      });
+      promptBuilder.assistantMessage("Optional Assistant", {
+        extra: { tags: ["assistant", "optional"], priority: 3 },
+      });
+
+      const result = promptBuilder.buildForAssistant((msg) => {
+        if (msg.role === "system") return true;
+        return msg.priority !== undefined && msg.priority <= 2;
+      });
+
+      expect(result.messages).toHaveLength(1); // Only Important User
+      expect(result.context).toBe("Important System"); // Only Important System
+    });
+
+    it("should handle undefined extra data", () => {
+      promptBuilder.systemMessage("System");
+      promptBuilder.userMessage("User", { extra: { tags: ["important"] } });
+
+      const result = promptBuilder.buildForAssistant(
+        (msg) => msg.tags?.includes("important") ?? false
+      );
+
+      expect(result.messages).toHaveLength(1); // Only tagged user message
+      expect(result.context).toBe(undefined); // No system message (didn't have important tag)
+    });
+
+    it("should handle complex filtering logic", () => {
+      promptBuilder.systemMessage("Setup", {
+        extra: {
+          tags: ["system", "setup"],
+          priority: 1,
+          category: "config",
+        },
+      });
+
+      promptBuilder.userMessage("Question", {
+        extra: {
+          tags: ["user", "question"],
+          priority: 2,
+          category: "support",
+        },
+      });
+
+      promptBuilder.assistantMessage("Answer", {
+        extra: {
+          tags: ["assistant", "answer"],
+          priority: 2,
+          category: "support",
+        },
+      });
+
+      const result = promptBuilder.buildForAssistant((msg) => {
+        // Include all system messages
+        if (msg.role === "system") return true;
+
+        // For other messages, check category and priority
+        return msg.category === "support" && (msg.priority as number) <= 2;
+      });
+
+      expect(result.messages).toHaveLength(2); // Question and Answer
+      expect(result.context).toBe("Setup"); // Setup message
     });
   });
 });

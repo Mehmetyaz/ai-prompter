@@ -1,3 +1,5 @@
+export * from "./types";
+
 export type ThreadMessageRole = "assistant" | "user";
 export type ChatMessageRole = ThreadMessageRole | "system";
 
@@ -18,6 +20,13 @@ type MessageInput = string | number | boolean | MessageBuilder;
 
 type _Input = MessageInput | WithMessageBuilder | WithMessageBuilderAsync;
 
+type MessageFilter = (
+  message: {
+    role: ChatMessageRole;
+    content: string;
+  } & AIPrompter.BuildingPrompt
+) => Boolean;
+
 export class PromptBuilder {
   constructor(
     public args: {
@@ -25,16 +34,20 @@ export class PromptBuilder {
     } = {}
   ) {}
 
-  private _messages: {
+  private _messages: ({
     placeholder?: string;
+    tags?: string[];
     role: ChatMessageRole;
     content: MessageInput;
-  }[] = [];
+  } & AIPrompter.BuildingPrompt)[] = [];
 
   _push(
     message: MessageInput | WithMessageBuilder,
     role: ChatMessageRole,
-    placeholder?: string
+    options?: {
+      placeholder?: string;
+      extra?: AIPrompter.BuildingPrompt;
+    }
   ): PromptBuilder {
     if (typeof message === "function") {
       if (isAsyncFunction(message)) {
@@ -49,14 +62,16 @@ export class PromptBuilder {
       this._messages.push({
         role,
         content: _message,
-        placeholder,
+        placeholder: options?.placeholder,
+        ...options?.extra,
       });
       return this;
     } else if (message instanceof MessageBuilder) {
       this._messages.push({
         role,
         content: message,
-        placeholder,
+        placeholder: options?.placeholder,
+        ...options?.extra,
       });
       return this;
     }
@@ -64,7 +79,8 @@ export class PromptBuilder {
     this._messages.push({
       role,
       content: _buildTemplate(`${message}`, this.args),
-      placeholder,
+      placeholder: options?.placeholder,
+      ...options?.extra,
     });
     return this;
   }
@@ -72,67 +88,133 @@ export class PromptBuilder {
   async _pushAsync(
     message: WithMessageBuilderAsync,
     role: ChatMessageRole,
-    placeholder?: string
+    options?: {
+      placeholder?: string;
+      extra?: AIPrompter.BuildingPrompt;
+    }
   ): Promise<PromptBuilder> {
     const _message = msg(undefined, this.args);
     await message(_message);
     this._messages.push({
       role,
       content: _message,
-      placeholder,
+      placeholder: options?.placeholder,
+      ...options?.extra,
     });
     return this;
   }
 
-  userMessage(message: MessageInput, placeholder?: string): PromptBuilder;
-  userMessage(message: WithMessageBuilder, placeholder?: string): PromptBuilder;
+  userMessage(
+    message: MessageInput,
+    options?: {
+      placeholder?: string;
+      extra?: AIPrompter.BuildingPrompt;
+    }
+  ): PromptBuilder;
+  userMessage(
+    message: WithMessageBuilder,
+    options?: {
+      placeholder?: string;
+      extra?: AIPrompter.BuildingPrompt;
+    }
+  ): PromptBuilder;
 
-  userMessage(message: _Input, placeholder?: string): PromptBuilder {
-    return this._push(message, "user", placeholder);
+  userMessage(
+    message: _Input,
+    options?: {
+      placeholder?: string;
+      extra?: AIPrompter.BuildingPrompt;
+    }
+  ): PromptBuilder {
+    return this._push(message, "user", options);
   }
 
   userMessageAsync(
     message: WithMessageBuilderAsync,
-    placeholder?: string
+    options?: {
+      placeholder?: string;
+      extra?: AIPrompter.BuildingPrompt;
+    }
   ): Promise<PromptBuilder> {
-    return this._pushAsync(message, "user", placeholder);
+    return this._pushAsync(message, "user", options);
   }
 
-  assistantMessage(message: MessageInput, placeholder?: string): PromptBuilder;
+  assistantMessage(
+    message: MessageInput,
+    options?: {
+      placeholder?: string;
+      extra?: AIPrompter.BuildingPrompt;
+    }
+  ): PromptBuilder;
   assistantMessage(
     message: WithMessageBuilder,
-    placeholder?: string
+    options?: {
+      placeholder?: string;
+      extra?: AIPrompter.BuildingPrompt;
+    }
   ): PromptBuilder;
 
-  assistantMessage(message: _Input, placeholder?: string): PromptBuilder {
-    return this._push(message, "assistant", placeholder);
+  assistantMessage(
+    message: _Input,
+    options?: {
+      placeholder?: string;
+      extra?: AIPrompter.BuildingPrompt;
+    }
+  ): PromptBuilder {
+    return this._push(message, "assistant", options);
   }
 
   async assistantMessageAsync(
     message: WithMessageBuilderAsync,
-    placeholder?: string
+    options?: {
+      placeholder?: string;
+      extra?: AIPrompter.BuildingPrompt;
+    }
   ): Promise<PromptBuilder> {
-    return this._pushAsync(message, "assistant", placeholder);
+    return this._pushAsync(message, "assistant", options);
   }
 
-  systemMessage(message: MessageInput): PromptBuilder;
-  systemMessage(message: WithMessageBuilder): PromptBuilder;
+  systemMessage(
+    message: MessageInput,
+    options?: {
+      placeholder?: string;
+      extra?: AIPrompter.BuildingPrompt;
+    }
+  ): PromptBuilder;
+  systemMessage(
+    message: WithMessageBuilder,
+    options?: {
+      placeholder?: string;
+      extra?: AIPrompter.BuildingPrompt;
+    }
+  ): PromptBuilder;
 
-  systemMessage(message: _Input): PromptBuilder {
-    return this._push(message, "system");
+  systemMessage(
+    message: _Input,
+    options?: {
+      placeholder?: string;
+      extra?: AIPrompter.BuildingPrompt;
+    }
+  ): PromptBuilder {
+    return this._push(message, "system", options);
   }
 
   async systemMessageAsync(
-    message: WithMessageBuilderAsync
+    message: WithMessageBuilderAsync,
+    options?: {
+      placeholder?: string;
+      extra?: AIPrompter.BuildingPrompt;
+    }
   ): Promise<PromptBuilder> {
-    return this._pushAsync(message, "system");
+    return this._pushAsync(message, "system", options);
   }
 
-  buildForAssistant(): {
+  buildForAssistant(filter?: MessageFilter): {
     messages: ThreadMessage[];
     context: string | undefined;
   } {
-    const messages = this._messages.map((m) => {
+    const _filter = filter ? (e: any) => filter(e) : () => true;
+    const messages = this._messages.filter(_filter).map((m) => {
       if (m.content instanceof MessageBuilder) {
         m.content.args = { ...this.args, ...m.content.args };
         return {
@@ -171,8 +253,9 @@ export class PromptBuilder {
     };
   }
 
-  build(): ChatMessage[] {
-    return this._messages.map((m) => {
+  build(filter?: MessageFilter): ChatMessage[] {
+    const _filter = filter ? (e: any) => filter(e) : () => true;
+    return this._messages.filter(_filter).map((m) => {
       if (m.content instanceof MessageBuilder) {
         m.content.args = { ...this.args, ...m.content.args };
         return {
